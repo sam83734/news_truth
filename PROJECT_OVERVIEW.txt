@@ -1,0 +1,190 @@
+================================================================================
+                    NEXTTRUTH DISPATCH - PROJECT OVERVIEW
+             (Complete Developer Guide & Real-World Flow in Hinglish)
+================================================================================
+
+1. YEH PROJECT KIS LIYE BAN RAHA HAI? (PROBLEM STATEMENT & VISION)
+--------------------------------------------------------------------------------
+Aaj ke traditional media me do sabse badi problems hain:
+1. Fake News aur Unverified Claims: Social media par koi bhi bina proof ke kuch
+   bhi viral kar deta hai jisse confusion aur panic failti hai.
+2. Ground Realities ka Missing Hona: Mainstream news channels ground reality
+   (aam janta, eyewitnesses, local reporters) se door rehte hain.
+
+"NextTruth Dispatch" ek Next-Generation Investigative & Ground News Platform hai.
+Iska aim hai:
+- Citizen Reporters aur Staff Journalists ko ek direct ground reporting desk dena.
+- Har news piece ke sath proof, geolocation aur verification audit trail attach karna.
+- Users ko 100% verified ground reality provide karna jisme koi bias ya fake news na ho.
+
+
+2. REAL-WORLD EXAMPLE (YE ASAL DUNIYA ME KAISE KAAM KARTA HAI?)
+--------------------------------------------------------------------------------
+Maano ek real-life scenario:
+
+SCENARIO:
+District 4 ke Market Square me shaam ko sudden protests shuru hote hain aur
+municipal corporation ne roads block kar di hain.
+
+STEP-BY-STEP WORKFLOW:
+
+Step 1: Ground Eyewitness / Reporter Action (Mobile App)
+  - Ground par maujood Citizen Reporter (jaise Rohan Sharma) ya Senior Journalist
+    apne mobile me "NextTruth App" open karta hai.
+  - Screen ke bottom right me "SUBMIT NEWS" (FAB button) par tap karta hai.
+  - Submit News Desk khulti hai:
+    * Category select karta hai: "Ground Reports" ya "Urgent".
+    * Headline likhta hai: "Market square protests escalate into the evening".
+    * Incident Location tag karta hai: "Old City Market District - Sector 4".
+    * Eyewitness Details & evidence notes textarea me likhta hai.
+    * Real-time camera se photo ya video attach karta hai.
+  - "TRANSMIT TO VERIFICATION DESK" button click karta hai.
+
+Step 2: Backend Transmission & Ingestion
+  - Mobile app yeh report Backend API (`POST /api/submissions`) par bhejti hai.
+  - Backend is submission ko ek unique ID, timestamp, reporter role ke sath
+    status: "PENDING" me database me store kar leta hai.
+
+Step 3: Verification & Editorial Review (Admin / Chief Editor)
+  - Chief Editor (Dr. Alexander Vance) ko alert milta hai.
+  - Editor Admin Desk (`PATCH /api/admin/submissions/:id/status`) par check karta
+    hai ki eyewitness report genuine hai ya nahi.
+  - Agar authentic hoti hai, to Editor use "APPROVED" karta hai aur system use
+    ek official "VERIFIED GROUND" Article/Video bana deta hai.
+
+Step 4: Real-time News Delivery to Readers
+  - Sabhi readers ko instant "Urgent Ground Alert" notification milta hai.
+  - Home Screen par Hero Card update hota hai jisme "VERIFIED GROUND" ka blue
+    badge dikhta hai.
+  - Readers chahe to:
+    * Pura article padh sakte hain.
+    * "Ground Verification Audit Dossier" check kar sakte hain (kisne verify kiya,
+      kya cross-reference hua).
+    * Audio Narration player on karke article sun sakte hain (driving/walking time).
+    * Live video feed me ground se aayi live coverage stream dekh sakte hain.
+
+Step 5: Monetization & Premium Journalism
+  - Platform par investigative op-eds aur deep-dive columns (e.g., Sarah Jenkins ki
+    Tech Privacy report) ke liye subscriber paywall hai.
+  - Users app me PayPal se Premium Subscription purchase kar sakte hain jisse
+    independent journalism fund hoti hai.
+
+
+3. PROJECT ARCHITECTURE & CODEBASE STRUCTURE
+--------------------------------------------------------------------------------
+Yeh repository ek clean Monorepo setup hai jisme do primary modules hain:
+
+/nexttruth-news
+│
+├── /backend                 --> Node.js + Express + TypeScript REST API
+│   ├── src/
+│   │   ├── config/          --> Database connection (MongoDB via Mongoose)
+│   │   ├── controllers/     --> Logic for Articles, Auth, Admin, Videos, etc.
+│   │   ├── data/db.ts       --> Hybrid In-Memory DataStore (Zero-config instant seed)
+│   │   ├── models/          --> Mongoose Database Schemas (User, Article, Video, etc.)
+│   │   ├── routes/          --> REST API Route definitions
+│   │   ├── types/           --> Shared TypeScript Interfaces
+│   │   └── server.ts        --> Main Express app initialization
+│   ├── package.json
+│   └── tsconfig.json
+│
+├── /news-app                --> React Native (Expo) Mobile Application
+│   ├── src/
+│   │   ├── api/             --> Axios/Fetch API client + auto host detection
+│   │   ├── components/      --> Reusable UI (TopHeader, NavBar, Modals, Banners)
+│   │   ├── context/         --> NewsContext (Global state for articles, user, theme)
+│   │   ├── screens/         --> Home, VideoFeed, Columns, SubmitNews, Profile, Detail
+│   │   ├── theme/           --> Brand Color Palette (Deep dark luxury UI)
+│   │   └── types/           --> App-wide TypeScript definitions
+│   ├── App.tsx              --> Main application navigation & root providers
+│   ├── app.json             --> Expo Configuration
+│   └── package.json
+│
+├── .gitignore               --> Configured to ignore node_modules, .env, build files
+├── README.md                --> Main project readme
+└── PROJECT_OVERVIEW.txt     --> Ye file (Developer Handover Reference)
+
+
+4. USER ROLES & ACCESS CONTROL
+--------------------------------------------------------------------------------
+System me 4 types ke user profiles support hote hain:
+1. GUEST:
+   - Default user bina login kiye app browse kar sakta hai, articles padh sakta hai.
+2. CITIZEN (USER):
+   - Eye-witness reports submit kar sakta hai, bookmarks save kar sakta hai.
+3. EXPERT / JOURNALIST:
+   - Ground expert badge, editorial columns likh sakte hain, reports publish hoti hain.
+4. ADMIN (CHIEF EDITOR):
+   - Submissions approve/reject karta hai, users manage karta hai, sponsored banners set karta hai.
+
+
+5. DUSRE DEVELOPER KE LIYE SETUP GUIDE (HOW TO RUN LOCALLY)
+--------------------------------------------------------------------------------
+
+A. PREREQUISITES:
+   - Node.js (v18 ya v20 recommended)
+   - npm (v9 ya v10)
+   - Expo Go app (agar apne physical phone par test karna chahte ho - Android/iOS)
+   - Optional: MongoDB running locally (default fallback in-memory data pehle se ready hai)
+
+B. BACKEND RUN KAISE KARE:
+   1. Terminal open kare aur backend directory me jaye:
+      cd backend
+   2. Dependencies install kare:
+      npm install
+   3. Backend start kare:
+      npm run dev
+      -> Server start hoga: http://localhost:5000
+      -> Health check URL: http://localhost:5000/api/health
+      -> Built-in data seed auto load ho jata hai. Agar MongoDB connect na ho,
+         tab bhi fallback system chalta hai testing ke liye.
+
+C. MOBILE APP (REACT NATIVE / EXPO) RUN KAISE KARE:
+   1. Naya terminal open kare aur news-app directory me jaye:
+      cd news-app
+   2. Dependencies install kare:
+      npm install
+   3. Agar aap physical phone pe Expo Go use kar rahe hain:
+      - File open kare: `news-app/src/api/config.ts`
+      - `LOCAL_LAN_IP` variable me apne computer ka Wi-Fi IPv4 address daal de
+        (cmd me `ipconfig` likh kar dekh sakte ho, e.g. 192.168.1.35).
+   4. Expo dev server start kare:
+      npx expo start
+   5. Testing options:
+      - Physical Phone: Terminal me jo QR code aayega use Expo Go app se scan kare.
+      - Web Browser Preview: Terminal me 'w' dabaye.
+      - Android Emulator: Terminal me 'a' dabaye.
+      - iOS Simulator: Terminal me 'i' dabaye (Mac par).
+
+
+6. IMPORTANT API ENDPOINTS REFERENCE
+--------------------------------------------------------------------------------
+Base URL: `http://localhost:5000/api`
+
+- GET  /api/health                 -> Server & DB health check
+- POST /api/auth/login             -> Login with email & password
+- POST /api/auth/register          -> Register new user account
+- GET  /api/articles               -> Get all published articles with category filter
+- GET  /api/articles/:id           -> Get full article detail with audit dossier
+- GET  /api/videos                 -> Get live & replay video feeds
+- POST /api/videos/:id/like        -> Like a video report
+- POST /api/submissions           -> Submit citizen eyewitness news report
+- GET  /api/submissions/my         -> View user's own submissions & review status
+- GET  /api/notifications          -> Fetch alerts & notification history
+- PATCH/api/admin/submissions/:id/status -> Approve / revise / reject submissions
+- GET  /api/sponsor-banner         -> Get active community sponsored banner
+
+
+7. KEY DESIGN & CODE PRACTICES FOLLOWED
+--------------------------------------------------------------------------------
+1. Zero Dependency Conflicts: React Native 0.79 + Expo 53 + React 19 compatibility.
+2. Premium Dark Aesthetic: OLED black (#0B0B0E), dark card surfaces (#15151A),
+   electric neon accents (Red, Indigo, Violet) inspired by modern high-end editorial apps.
+3. Audio Integration: Built-in narration bar with play/pause, scrub slider, speed toggle.
+4. Clean TypeScript: Strictly typed data models across both frontend and backend.
+5. Error Resilience: Backend me automatic in-memory fallback agar MongoDB local URI
+   accessible na ho, taaki developer ko zero setup hurdle ho.
+
+================================================================================
+Report prepared for developer handover. NextTruth Dispatch is production-ready.
+================================================================================
