@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "NextTruth Dispatch",
+    "slug": "nexttruth-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/susalabs.jpg",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#FDF8FD"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FDF8FD"
+      }
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font",
+      "expo-audio"
+    ]
+  }
+}

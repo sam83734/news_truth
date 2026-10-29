@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Daily Pulse | Social Hybrid News</title>
+    <style>
+        :root {
+            --bg-primary: #0f0f12;
+            --bg-secondary: #1a1a24;
+            --accent-red: #ff0055;
+            --accent-blue: #1d9bf0;
+            --accent-purple: #833ab4;
+            --text-main: #f1f1f1;
+            --text-muted: #9999a1;
+            --border-color: #2a2a38;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            display: grid;
+            grid-template-columns: 240px 1fr 320px;
+            min-height: 100vh;
+        }
+
+        /* Navigation Sidebar */
+        .sidebar {
+            background-color: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(45deg, var(--accent-red), var(--accent-purple), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 30px;
+        }
+
+        .nav-links {
+            list-style: none;
+        }
+
+        .nav-links li {
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-muted);
+            transition: 0.2s;
+        }
+
+        .nav-links li:hover, .nav-links li.active {
+            background-color: var(--border-color);
+            color: var(--text-main);
+        }
+
+        /* Main News Feed */
+        .main-feed {
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Top Stories Carousel (Instagram Style) */
+        .stories-bar {
+            display: flex;
+            gap: 15px;
+            overflow-x: auto;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .story-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.75rem;
+            width: 70px;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        .story-ring {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            padding: 3px;
+            background: linear-gradient(45deg, var(--accent-red), var(--accent-blue));
+            margin-bottom: 5px;
+        }
+
+        .story-ring img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--bg-primary);
+        }
+
+        /* News Cards */
+        .news-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            margin-bottom: 25px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .source-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .source-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: #444;
+        }
+
+        .source-name {
+            font-weight: 700;
+            font-size: 0.95rem;
+        }
+
+        .source-handle {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-weight: 400;
+        }
+
+        /* YouTube Video Section */
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+            height: 0;
+            background-color: #000;
+        }
+
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+
+        /* Article/Tweet Content Section */
+        .card-body {
+            padding: 15px;
+        }
+
+        .headline {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+
+        .tweet-text {
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: #ddd;
+            margin-bottom: 12px;
+        }
+
+        .hashtags {
+            color: var(--accent-blue);
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+        }
+
+        /* Engagement Bar */
+        .card-actions {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 15px;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .action-btn:hover {
+            color: var(--accent-blue);
+        }
+
+        /* Right Trending Sidebar */
+        .widgets-sidebar {
+            padding: 20px;
+            border-left: 1px solid var(--border-color);
+        }
+
+        .widget {
+            background-color: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .widget-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .trending-item {
+            margin-bottom: 12px;
+            cursor: pointer;
+        }
+
+        .trending-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .trending-topic {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1000px) {
+            body {
+                grid-template-columns: 80px 1fr;
+            }
+            .widgets-sidebar {
+                display: none;
+            }
+            .nav-text {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <div class="logo">PULSE</div>
+        <ul class="nav-links">
+            <li class="active">🏠 <span class="nav-text">Feed</span></li>
+            <li>🔥 <span class="nav-text">Trending</span></li>
+            <li>📺 <span class="nav-text">Watch</span></li>
+            <li>📸 <span class="nav-text">Snapshots</span></li>
+            <li>🔖 <span class="nav-text">Bookmarks</span></li>
+        </ul>
+    </nav>
+
+    <main class="main-feed">
+        
+        <div class="stories-bar">
+            <div class="story-node">
+                <div class="story-ring"><img src="https://picsum.photos/60/60?random=1" alt="News"></div>
+                <span>LIVE: Markets</span>
+            </div>
+            <div class="story-node">
+                <div class="story-ring"><img src="https://picsum.photos/60/60?random=2" alt="News"></div>
+                <span>Tech Alert</span>
+            </div>
+            <div class="story-node">
+                <div class="story-ring"><img src="https://picsum.photos/60/60?random=3" alt="News"></div>
+                <span>World News</span>
+            </div>
+            <div class="story-node">
+                <div class="story-ring"><img src="https://picsum.photos/60/60?random=4" alt="News"></div>
+                <span>Climate</span>
+            </div>
+        </div>
+
+        <article class="news-card">
+            <div class="card-header">
+                <div class="source-info">
+                    <img class="source-avatar" src="https://picsum.photos/40/40?random=5" alt="Avatar">
+                    <div>
+                        <span class="source-name">TechChronicle</span>
+                        <span class="source-handle">@techchronicle • 12m</span>
+                    </div>
+                </div>
+                <span>•••</span>
+            </div>
+
+            <div class="video-container">
+                <iframe src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" title="Video player" allowfullscreen></iframe>
+            </div>
+
+            <div class="card-body">
+                <h2 class="headline">Breakthrough in Renewable Fusion Energy Announced by International Researchers</h2>
+                <p class="tweet-text">Scientists have hit a net-energy-gain milestone for the third time this year, paving the way for scalable commercial testing setups by late 2028. Full breakdown above.</p>
+                <div class="hashtags">#CleanEnergy #FusionTech #ScienceUpdate</div>
+            </div>
+
+            <div class="card-actions">
+                <button class="action-btn">💬 342 Replies</button>
+                <button class="action-btn">🔁 1.2K Reposts</button>
+                <button class="action-btn">❤️ 8.5K Likes</button>
+                <button class="action-btn">📤 Share</button>
+            </div>
+        </article>
+
+    </main>
+
+    <aside class="widgets-sidebar">
+        <div class="widget">
+            <h3 class="widget-title">Trending News Topics</h3>
+            <div class="trending-item">
+                <div class="trending-meta">Technology • Trending</div>
+                <div class="trending-topic">#QuantumComputing</div>
+                <div class="trending-meta">45.2K Posts</div>
+            </div>
+            <div class="trending-item">
+                <div class="trending-meta">Global Politics • 1 hour ago</div>
+                <div class="trending-topic">UN Climate Summit 2026</div>
+                <div class="trending-meta">12.8K Posts</div>
+            </div>
+            <div class="trending-item">
+                <div class="trending-meta">Finance • Trending</div>
+                <div class="trending-topic">Global Markets Rally</div>
+                <div class="trending-meta">89.1K Posts</div>
+            </div>
+        </div>
+    </aside>
+
+</body>
+</html>
