@@ -39,6 +39,10 @@ export const SubmitNewsScreen: React.FC = () => {
   const [attachedMedia, setAttachedMedia] = useState<MediaAttachment[]>([]);
   const [previewMedia, setPreviewMedia] = useState<MediaAttachment | null>(null);
 
+  // Multi-Stake Verification Requirements (Matches Web Editorial Protocol)
+  const [requireJournalist, setRequireJournalist] = useState<boolean>(true);
+  const [requireExpert, setRequireExpert] = useState<boolean>(true);
+
   const categories = [
     'Ground Report',
     'Urgent Dispatch',
@@ -213,7 +217,9 @@ export const SubmitNewsScreen: React.FC = () => {
         description.trim(),
         sourceNotes,
         attachmentsJson,
-        undefined  // no audio
+        undefined,  // no audio
+        requireJournalist,
+        requireExpert
       );
 
       // Reset form
@@ -457,6 +463,55 @@ export const SubmitNewsScreen: React.FC = () => {
               </ScrollView>
             </View>
           )}
+        </View>
+
+        {/* Multi-Stake Verification Controls (Matches Web Editorial Desk) */}
+        <View style={styles.reviewStagesCard}>
+          <View style={styles.reviewStagesHeader}>
+            <MaterialIcons name="verified-user" size={18} color="#21005D" />
+            <Text style={styles.reviewStagesTitle}>REQUIRED CORROBORATION GATES</Text>
+          </View>
+          <Text style={styles.reviewStagesSubtitle}>
+            Configure editorial sign-offs required before this eyewitness report is confirmed and sealed onto the DLT Truth Ledger.
+          </Text>
+
+          {/* Gate 1: Staff Journalist */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setRequireJournalist(!requireJournalist)}
+            style={styles.reviewToggleRow}
+          >
+            <View style={styles.checkboxCircle}>
+              {requireJournalist && (
+                <MaterialIcons name="check" size={16} color="#6750A4" />
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.reviewToggleTitle}>Require Staff Journalist Field Audit</Text>
+              <Text style={styles.reviewToggleDesc}>
+                Accredited staff correspondent must corroborate eyewitness evidence on ground.
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Gate 2: Ground Expert Fact-Check */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setRequireExpert(!requireExpert)}
+            style={styles.reviewToggleRow}
+          >
+            <View style={styles.checkboxCircle}>
+              {requireExpert && (
+                <MaterialIcons name="check" size={16} color="#6750A4" />
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.reviewToggleTitle}>Require Ground Expert Forensic Fact-Check</Text>
+              <Text style={styles.reviewToggleDesc}>
+                Domain policy expert must certify technical veracity and regulatory impact.
+              </Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Transmit to Verification Desk Submit Button with Loading Effect */}
@@ -918,5 +973,64 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  reviewStagesCard: {
+    backgroundColor: '#FAF5FF',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+  },
+  reviewStagesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  reviewStagesTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#21005D',
+    letterSpacing: 0.5,
+  },
+  reviewStagesSubtitle: {
+    fontSize: 11,
+    color: '#6B21A8',
+    lineHeight: 16,
+    marginBottom: 12,
+  },
+  reviewToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#F3E8FF',
+  },
+  checkboxCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#6750A4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    backgroundColor: '#FFFFFF',
+  },
+  reviewToggleTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E1B4B',
+  },
+  reviewToggleDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 15,
   },
 });

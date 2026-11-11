@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Dimensions,
   RefreshControl,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNews } from '../context/NewsContext';
@@ -17,6 +18,32 @@ import { VerifiedGroundBadge } from '../components/VerifiedGroundBadge';
 import { SponsoredBanner } from '../components/SponsoredBanner';
 import { SubmitNewsFab } from '../components/SubmitNewsFab';
 import { Colors } from '../theme/colors';
+import { newsApi } from '../api/newsApi';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const matchesActiveCategory = (article: Article, filter: string): boolean => {
+  if (!filter || filter === 'All') return true;
+  const cat = filter.toLowerCase().trim();
+  const artCat = (article.category || '').toLowerCase().trim();
+
+  if (cat === 'urgent' || cat.includes('urgent')) {
+    return Boolean(article.isUrgent) || artCat.includes('urgent');
+  }
+  if (cat === 'ground reports' || cat === 'ground' || cat.includes('ground')) {
+    return Boolean(article.isVerifiedGround) || artCat.includes('ground') || artCat.includes('investigative');
+  }
+  if (cat === 'opinion' || cat.includes('opinion')) {
+    return Boolean(article.isOpinion) || artCat.includes('opinion') || artCat.includes('editorial');
+  }
+  if (cat === 'economics' || cat.includes('econom') || cat.includes('business')) {
+    return artCat.includes('econom') || artCat.includes('trade') || artCat.includes('business') || artCat.includes('finance');
+  }
+  if (cat === 'infrastructure' || cat.includes('infrastruct') || cat.includes('urban') || cat.includes('municipal')) {
+    return artCat.includes('infrastruct') || artCat.includes('municipal') || artCat.includes('urban');
+  }
+  return artCat.includes(cat);
+};
 
 export const HomeScreen: React.FC = () => {
   const {
@@ -26,15 +53,72 @@ export const HomeScreen: React.FC = () => {
     standardNewsArticles,
     openArticle,
     openVideo,
+    openLightbox,
     selectTab,
     activeCategoryFilter,
     setCategoryFilter,
+    showServerModal,
+    setShowServerModal,
     isLoading,
     isRefreshing,
     refreshData,
   } = useNews();
 
   const categories = ['All', 'Urgent', 'Ground Reports', 'Opinion', 'Economics', 'Infrastructure'];
+  const isFiltered = activeCategoryFilter !== 'All';
+
+  // Multi-candidate Urgent Breaking auto-slider (Slides every 60s if > 1 news)
+  const urgentCandidates: Article[] = useMemo(() => {
+    const list: Article[] = [];
+    if (heroArticle) list.push(heroArticle);
+    standardNewsArticles.forEach((a) => {
+      if (a.isUrgent || (a.category && a.category.toLowerCase().includes('urgent'))) {
+        if (!list.find((item) => item.id === a.id)) {
+          list.push(a);
+        }
+      }
+    });
+    return list.length > 0 ? list : (heroArticle ? [heroArticle] : []);
+  }, [heroArticle, standardNewsArticles]);
+
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  useEffect(() => {
+    if (urgentCandidates.length <= 1) return;
+    const timer = setInterval(() => {
+      setActiveSlide((prev) => (prev + 1) % urgentCandidates.length);
+    }, 60000); // 60 seconds (1 minute auto slide)
+    return () => clearInterval(timer);
+  }, [urgentCandidates.length]);
+
+  const currentHero = urgentCandidates[activeSlide] || heroArticle;
+
+  // Filtered Articles Stream strictly matching active category
+  const filteredArticles = useMemo(() => {
+    if (!isFiltered) return [];
+    const pool: Article[] = [];
+    const seen = new Set<string>();
+
+    // Check standardNewsArticles first (which might be pre-filtered by API)
+    standardNewsArticles.forEach((a) => {
+      if (a && !seen.has(a.id) && matchesActiveCategory(a, activeCategoryFilter)) {
+        seen.add(a.id);
+        pool.push(a);
+      }
+    });
+
+    // Also check hero & opinion in case they match the selected category
+    if (heroArticle && !seen.has(heroArticle.id) && matchesActiveCategory(heroArticle, activeCategoryFilter)) {
+      seen.add(heroArticle.id);
+      pool.push(heroArticle);
+    }
+    if (opinionArticle && !seen.has(opinionArticle.id) && matchesActiveCategory(opinionArticle, activeCategoryFilter)) {
+      seen.add(opinionArticle.id);
+      pool.push(opinionArticle);
+    }
+
+    return pool;
+  }, [isFiltered, activeCategoryFilter, standardNewsArticles, heroArticle, opinionArticle]);
 
   return (
     <View style={styles.container}>
@@ -87,63 +171,181 @@ export const HomeScreen: React.FC = () => {
           })}
         </ScrollView>
 
-        {isLoading && !isRefreshing && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#6750A4" />
-            <Text style={styles.loadingText}>Fetching ground reports...</Text>
+        {isLoading && !isRefreshing ? (
+          <HomeSkeletonLoader />
+        ) : null}
+
+        {/* --- WHEN FILTERED: SHOW ONLY RELEVANT NEWS --- */}
+        {isFiltered ? (
+          <View style={styles.filteredContainer}>
+            {/* Filter Status Badge Bar */}
+            <View style={styles.filterStatusRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="filter-list" size={16} color="#6750A4" />
+                <Text style={styles.filterStatusText}>
+                  {activeCategoryFilter} News ({filteredArticles.length})
+                </Text>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setCategoryFilter('All')}
+                style={styles.filterResetBtn}
+              >
+                <MaterialIcons name="close" size={13} color="#6750A4" />
+                <Text style={styles.filterResetText}>Reset to All</Text>
+              </TouchableOpacity>
+            </View>
+
+            {filteredArticles.length === 0 ? (
+              <View style={styles.filterEmptyBox}>
+                <MaterialIcons name="find-in-page" size={42} color="#CBD5E1" />
+                <Text style={styles.filterEmptyTitle}>No {activeCategoryFilter} Dispatches Found</Text>
+                <Text style={styles.filterEmptySub}>
+                  There are currently no published reports under this topic. Check back soon or dispatch eyewitness evidence.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setCategoryFilter('All')}
+                  style={[styles.retryBtn, { marginTop: 8 }]}
+                >
+                  <Text style={styles.retryBtnText}>View All News</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                {/* Highlight top article of the category if hero card */}
+                {filteredArticles[0] && (
+                  <View style={styles.section}>
+                    <HeroArticleCard
+                      article={filteredArticles[0]}
+                      onReadFullClick={() => openArticle(filteredArticles[0])}
+                      totalSlides={1}
+                      currentSlide={0}
+                    />
+                  </View>
+                )}
+
+                {/* If Ground Reports and Live Videos exist, show ground stream */}
+                {activeCategoryFilter === 'Ground Reports' && liveVideos && liveVideos.length > 0 && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionHeading}>Live on the Ground</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.videosRow}
+                    >
+                      {liveVideos.map((video) => (
+                        <LiveVideoItem
+                          key={video.id}
+                          video={video}
+                          onClick={() => openVideo(video)}
+                        />
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Remaining articles in this category */}
+                {filteredArticles.slice(1).map((article) => (
+                  <StandardNewsCard
+                    key={article.id}
+                    article={article}
+                    onClick={() => openArticle(article)}
+                  />
+                ))}
+              </>
+            )}
           </View>
-        )}
-
-        {/* 1. Ground Reports Hero Section */}
-        {heroArticle && (
-          <View style={styles.section}>
-            <HeroArticleCard
-              article={heroArticle}
-              onReadFullClick={() => openArticle(heroArticle)}
-            />
-          </View>
-        )}
-
-        {/* 2. Live on the Ground Carousel */}
-        {liveVideos && liveVideos.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionHeading}>Live on the Ground</Text>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.videosRow}
-            >
-              {liveVideos.map((video) => (
-                <LiveVideoItem
-                  key={video.id}
-                  video={video}
-                  onClick={() => openVideo(video)}
+        ) : (
+          /* --- DEFAULT HOMEPAGE STREAM (WHEN ALL IS SELECTED) --- */
+          <>
+            {/* 1. Ground Reports Urgent / Hero Section */}
+            {currentHero && (
+              <View style={styles.section}>
+                <HeroArticleCard
+                  article={currentHero}
+                  onReadFullClick={() => openArticle(currentHero)}
+                  totalSlides={urgentCandidates.length}
+                  currentSlide={activeSlide}
+                  onPrevSlide={() =>
+                    setActiveSlide((prev) => (prev - 1 + urgentCandidates.length) % urgentCandidates.length)
+                  }
+                  onNextSlide={() =>
+                    setActiveSlide((prev) => (prev + 1) % urgentCandidates.length)
+                  }
                 />
-              ))}
-            </ScrollView>
+              </View>
+            )}
+
+            {/* 2. Live on the Ground Carousel */}
+            {liveVideos && liveVideos.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionHeading}>Live on the Ground</Text>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.videosRow}
+                >
+                  {liveVideos.map((video) => (
+                    <LiveVideoItem
+                      key={video.id}
+                      video={video}
+                      onClick={() => openVideo(video)}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* 3. Sponsored Banner */}
+            <SponsoredBanner />
+
+            {/* 4. Opinion Block (with signature left violet accent bar) */}
+            {opinionArticle && (
+              <OpinionCard
+                article={opinionArticle}
+                onClick={() => openArticle(opinionArticle)}
+              />
+            )}
+
+            {/* 5. Standard News Stream */}
+            {standardNewsArticles.map((article) => (
+              <StandardNewsCard
+                key={article.id}
+                article={article}
+                onClick={() => openArticle(article)}
+              />
+            ))}
+          </>
+        )}
+
+        {/* Server Connection Error Helper Card */}
+        {!isLoading && !currentHero && standardNewsArticles.length === 0 && (
+          <View style={styles.emptyConnectionBox}>
+            <MaterialIcons name="cloud-off" size={40} color="#94A3B8" />
+            <Text style={styles.emptyConnectionTitle}>Cannot reach backend server</Text>
+            <Text style={styles.emptyConnectionSub}>
+              Target: {newsApi.getHost()}
+              {'\n'}Make sure the computer running the backend is on the same Wi-Fi.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+              <TouchableOpacity
+                onPress={() => refreshData()}
+                style={styles.retryBtn}
+              >
+                <MaterialIcons name="refresh" size={16} color="#334155" />
+                <Text style={styles.retryBtnText}>Retry Ping</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowServerModal(true)}
+                style={styles.changeIpBtn}
+              >
+                <MaterialIcons name="settings" size={16} color="#FFFFFF" />
+                <Text style={styles.changeIpBtnText}>Configure IP</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
-
-        {/* 3. Sponsored Banner */}
-        <SponsoredBanner />
-
-        {/* 4. Opinion Block (with signature left violet accent bar) */}
-        {opinionArticle && (
-          <OpinionCard
-            article={opinionArticle}
-            onClick={() => openArticle(opinionArticle)}
-          />
-        )}
-
-        {/* 5. Standard News Stream */}
-        {standardNewsArticles.map((article) => (
-          <StandardNewsCard
-            key={article.id}
-            article={article}
-            onClick={() => openArticle(article)}
-          />
-        ))}
       </ScrollView>
 
       {/* Prominent Submit News FAB (Bottom Right) */}
@@ -155,9 +357,21 @@ export const HomeScreen: React.FC = () => {
 const HeroArticleCard: React.FC<{
   article: Article;
   onReadFullClick: () => void;
-}> = ({ article, onReadFullClick }) => {
-  const { bookmarkedArticleIds, toggleBookmark } = useNews();
+  totalSlides?: number;
+  currentSlide?: number;
+  onPrevSlide?: () => void;
+  onNextSlide?: () => void;
+}> = ({
+  article,
+  onReadFullClick,
+  totalSlides = 1,
+  currentSlide = 0,
+  onPrevSlide,
+  onNextSlide,
+}) => {
+  const { bookmarkedArticleIds, toggleBookmark, openLightbox } = useNews();
   const isBookmarked = bookmarkedArticleIds.has(article.id);
+  const isUrgent = article.isUrgent || (article.category && article.category.toLowerCase().includes('urgent'));
 
   return (
     <TouchableOpacity
@@ -165,8 +379,47 @@ const HeroArticleCard: React.FC<{
       onPress={onReadFullClick}
       style={styles.heroCard}
     >
-      {/* Image with Verified Ground Badge */}
-      <View style={styles.heroImageContainer}>
+      {/* Top Slider Header if multiple urgent news */}
+      {totalSlides > 1 && (
+        <View style={styles.urgentSliderHeader}>
+          <View style={styles.urgentSliderBadge}>
+            <View style={styles.urgentPulsingDot} />
+            <Text style={styles.urgentSliderBadgeText}>
+              {isUrgent ? 'URGENT BREAKING' : 'FEATURED LEAD'} • {currentSlide + 1} OF {totalSlides}
+            </Text>
+          </View>
+
+          <View style={styles.sliderArrowsRow}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={onPrevSlide}
+              style={styles.sliderArrowBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons name="chevron-left" size={20} color="#21005D" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={onNextSlide}
+              style={styles.sliderArrowBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons name="chevron-right" size={20} color="#21005D" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Image with Verified Ground Badge - Tap opens in Lightbox */}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => {
+          if (article.imageUrl) {
+            openLightbox(article.imageUrl);
+          }
+        }}
+        style={styles.heroImageContainer}
+      >
         {article.imageUrl ? (
           <Image
             source={{ uri: article.imageUrl }}
@@ -181,7 +434,22 @@ const HeroArticleCard: React.FC<{
             <VerifiedGroundBadge />
           </View>
         )}
-      </View>
+
+        {/* Indicator Dots inside image */}
+        {totalSlides > 1 && (
+          <View style={styles.sliderDotsOverlay}>
+            {Array.from({ length: totalSlides }).map((_, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.sliderDot,
+                  idx === currentSlide && styles.sliderDotActive,
+                ]}
+              />
+            ))}
+          </View>
+        )}
+      </TouchableOpacity>
 
       {/* Content Box */}
       <View style={styles.heroContent}>
@@ -351,7 +619,7 @@ const StandardNewsCard: React.FC<{
   article: Article;
   onClick: () => void;
 }> = ({ article, onClick }) => {
-  const { bookmarkedArticleIds, toggleBookmark } = useNews();
+  const { bookmarkedArticleIds, toggleBookmark, openLightbox } = useNews();
   const isBookmarked = bookmarkedArticleIds.has(article.id);
 
   return (
@@ -388,11 +656,16 @@ const StandardNewsCard: React.FC<{
       </View>
 
       {article.imageUrl ? (
-        <Image
-          source={{ uri: article.imageUrl }}
-          style={styles.standardImage}
-          resizeMode="cover"
-        />
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => openLightbox(article.imageUrl!)}
+        >
+          <Image
+            source={{ uri: article.imageUrl }}
+            style={styles.standardImage}
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
       ) : null}
     </TouchableOpacity>
   );
@@ -717,4 +990,265 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
+  urgentSliderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#FEF2F2',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FEE2E2',
+  },
+  urgentSliderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  urgentPulsingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#DC2626',
+  },
+  urgentSliderBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#991B1B',
+    letterSpacing: 0.5,
+  },
+  sliderArrowsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sliderArrowBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sliderDotsOverlay: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  sliderDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  sliderDotActive: {
+    width: 14,
+    backgroundColor: '#F97316',
+  },
+  skeletonContainer: {
+    paddingHorizontal: 16,
+    gap: 16,
+    marginBottom: 20,
+  },
+  skeletonHeroCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E6E1E5',
+  },
+  skeletonHeroImage: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#E7E0EC',
+  },
+  skeletonStandardCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#E6E1E5',
+    gap: 12,
+  },
+  skeletonLine: {
+    backgroundColor: '#E7E0EC',
+    borderRadius: 4,
+  },
+  skeletonThumb: {
+    width: 84,
+    height: 84,
+    borderRadius: 8,
+    backgroundColor: '#E7E0EC',
+  },
+  filteredContainer: {
+    paddingBottom: 16,
+  },
+  filterStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#F3E8FF',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+  },
+  filterStatusText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#21005D',
+  },
+  filterResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+  },
+  filterResetText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6750A4',
+  },
+  filterEmptyBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    marginHorizontal: 16,
+    marginVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 8,
+  },
+  filterEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E293B',
+    textAlign: 'center',
+  },
+  filterEmptySub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  emptyConnectionBox: {
+    marginHorizontal: 16,
+    marginVertical: 24,
+    padding: 24,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyConnectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginTop: 4,
+  },
+  emptyConnectionSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  retryBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  changeIpBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: '#6750A4',
+  },
+  changeIpBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
 });
+
+const HomeSkeletonLoader: React.FC = () => {
+  const animatedOpacity = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(animatedOpacity, {
+          toValue: 0.85,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(animatedOpacity, {
+          toValue: 0.4,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [animatedOpacity]);
+
+  return (
+    <View style={styles.skeletonContainer}>
+      <View style={styles.skeletonHeroCard}>
+        <Animated.View style={[styles.skeletonHeroImage, { opacity: animatedOpacity }]} />
+        <View style={{ padding: 16, gap: 10 }}>
+          <Animated.View style={[styles.skeletonLine, { width: '85%', height: 18, opacity: animatedOpacity }]} />
+          <Animated.View style={[styles.skeletonLine, { width: '60%', height: 18, opacity: animatedOpacity }]} />
+          <Animated.View style={[styles.skeletonLine, { width: '95%', height: 12, opacity: animatedOpacity }]} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+            <Animated.View style={[styles.skeletonLine, { width: '40%', height: 12, opacity: animatedOpacity }]} />
+            <Animated.View style={[styles.skeletonLine, { width: '25%', height: 26, borderRadius: 13, opacity: animatedOpacity }]} />
+          </View>
+        </View>
+      </View>
+
+      {[1, 2].map((k) => (
+        <View key={k} style={styles.skeletonStandardCard}>
+          <View style={{ flex: 1, gap: 8 }}>
+            <Animated.View style={[styles.skeletonLine, { width: '30%', height: 10, opacity: animatedOpacity }]} />
+            <Animated.View style={[styles.skeletonLine, { width: '90%', height: 14, opacity: animatedOpacity }]} />
+            <Animated.View style={[styles.skeletonLine, { width: '70%', height: 12, opacity: animatedOpacity }]} />
+          </View>
+          <Animated.View style={[styles.skeletonThumb, { opacity: animatedOpacity }]} />
+        </View>
+      ))}
+    </View>
+  );
+};

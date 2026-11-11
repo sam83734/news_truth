@@ -4,6 +4,7 @@ import { ArticleModel } from '../models/Article';
 import { db } from '../data/db';
 import { Article } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { dltService } from '../services/dltService';
 
 /** Compute a human-readable relative-time string from a createdAt ISO timestamp */
 const getRelativeTime = (iso?: string): string => {
@@ -19,13 +20,49 @@ const getRelativeTime = (iso?: string): string => {
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 };
 
-/** Enrich an article object with dynamic dateOrTimeAgo from createdAt */
+/** Enrich an article object with dynamic dateOrTimeAgo from createdAt and DLT cryptographic seal */
 const enrichArticle = (a: any): any => {
   const plain = a.toJSON ? a.toJSON() : { ...a };
   if (plain.createdAt) {
     plain.dateOrTimeAgo = getRelativeTime(plain.createdAt);
   }
+  const entityId = plain.id || plain.customId;
+  let dltBlock = dltService.getBlockByEntityId(entityId);
+  if (!dltBlock) {
+    // Auto-anchor to DLT ledger if missing
+    dltBlock = dltService.anchorArticle(plain);
+  }
+  if (dltBlock) {
+    plain.dltBlockHash = dltBlock.blockHash;
+    plain.dltBlockIndex = dltBlock.blockIndex;
+    plain.dltContentHash = dltBlock.contentHash;
+    plain.dltIpfsCid = dltBlock.ipfsCid;
+    plain.dltStatus = dltBlock.status;
+  }
   return plain;
+};
+
+const matchesCategoryFilter = (article: any, category: string): boolean => {
+  if (!category || category === 'All') return true;
+  const cat = category.toLowerCase().trim();
+  const artCat = (article.category || '').toLowerCase().trim();
+
+  if (cat === 'urgent' || cat.includes('urgent')) {
+    return Boolean(article.isUrgent) || artCat.includes('urgent');
+  }
+  if (cat === 'ground reports' || cat === 'ground' || cat.includes('ground')) {
+    return Boolean(article.isVerifiedGround) || artCat.includes('ground') || artCat.includes('investigative');
+  }
+  if (cat === 'opinion' || cat.includes('opinion')) {
+    return Boolean(article.isOpinion) || artCat.includes('opinion') || artCat.includes('editorial');
+  }
+  if (cat === 'economics' || cat.includes('econom') || cat.includes('business')) {
+    return artCat.includes('econom') || artCat.includes('trade') || artCat.includes('business') || artCat.includes('finance');
+  }
+  if (cat === 'infrastructure' || cat.includes('infrastruct') || cat.includes('urban') || cat.includes('municipal')) {
+    return artCat.includes('infrastruct') || artCat.includes('municipal') || artCat.includes('urban');
+  }
+  return artCat.includes(cat);
 };
 
 export const getArticles = async (req: Request, res: Response) => {
@@ -37,14 +74,36 @@ export const getArticles = async (req: Request, res: Response) => {
     if (mongoose.connection.readyState === 1) {
       const query: any = {};
       if (category && typeof category === 'string' && category !== 'All') {
-        query.category = category;
+        const cat = category.toLowerCase().trim();
+        if (cat === 'urgent' || cat.includes('urgent')) {
+          query.$or = [{ isUrgent: true }, { category: { $regex: 'urgent', $options: 'i' } }];
+        } else if (cat === 'ground reports' || cat === 'ground' || cat.includes('ground')) {
+          query.$or = [{ isVerifiedGround: true }, { category: { $regex: 'ground|investigative', $options: 'i' } }];
+        } else if (cat === 'opinion' || cat.includes('opinion')) {
+          query.$or = [{ isOpinion: true }, { category: { $regex: 'opinion|editorial', $options: 'i' } }];
+        } else if (cat === 'economics' || cat.includes('econom') || cat.includes('business')) {
+          query.category = { $regex: 'econom|trade|business|finance', $options: 'i' };
+        } else if (cat === 'infrastructure' || cat.includes('infrastruct') || cat.includes('urban') || cat.includes('municipal')) {
+          query.category = { $regex: 'infrastruct|municipal|urban', $options: 'i' };
+        } else {
+          query.category = { $regex: category.trim(), $options: 'i' };
+        }
       }
       if (search && typeof search === 'string' && search.trim()) {
-        query.$or = [
-          { title: { $regex: search.trim(), $options: 'i' } },
-          { excerpt: { $regex: search.trim(), $options: 'i' } },
-          { authorName: { $regex: search.trim(), $options: 'i' } },
-        ];
+        const searchRegex = { $regex: search.trim(), $options: 'i' };
+        if (query.$or) {
+          query.$and = [
+            { $or: query.$or },
+            { $or: [{ title: searchRegex }, { excerpt: searchRegex }, { authorName: searchRegex }] }
+          ];
+          delete query.$or;
+        } else {
+          query.$or = [
+            { title: searchRegex },
+            { excerpt: searchRegex },
+            { authorName: searchRegex },
+          ];
+        }
       }
       articles = await ArticleModel.find(query).sort({ createdAt: -1 });
     }
@@ -52,9 +111,7 @@ export const getArticles = async (req: Request, res: Response) => {
     if (articles.length === 0) {
       let filtered = [...db.articles];
       if (category && typeof category === 'string' && category !== 'All') {
-        filtered = filtered.filter(
-          (a) => a.category.toLowerCase() === category.toLowerCase()
-        );
+        filtered = filtered.filter((a) => matchesCategoryFilter(a, category));
       }
       if (search && typeof search === 'string' && search.trim()) {
         const q = search.toLowerCase().trim();
@@ -222,6 +279,7 @@ export const createArticle = async (req: Request, res: Response) => {
       ...newArticleData,
     };
     db.articles.unshift(memArticle);
+    dltService.anchorArticle(memArticle);
 
     res.status(201).json({ success: true, data: created || memArticle });
   } catch (error: any) {

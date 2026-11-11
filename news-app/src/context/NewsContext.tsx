@@ -10,6 +10,7 @@ import {
   UserRole,
   SubmissionStatus,
   SponsoredBannerData,
+  DLTBlock,
 } from '../types';
 import { newsApi } from '../api/newsApi';
 
@@ -26,6 +27,7 @@ interface NewsContextType {
   submissions: Submission[];
   publishedBentoArticles: Article[];
   bookmarkedArticleIds: Set<string>;
+  bookmarkedArticles: Article[];
   toggleBookmark: (articleId: string) => Promise<void>;
   likedVideoIds: Set<string>;
   toggleVideoLike: (videoId: string) => Promise<number | undefined>;
@@ -49,6 +51,8 @@ interface NewsContextType {
   setShowSearchModal: (show: boolean) => void;
   showSponsoredModal: boolean;
   setShowSponsoredModal: (show: boolean) => void;
+  showServerModal: boolean;
+  setShowServerModal: (show: boolean) => void;
   sponsoredBanner: SponsoredBannerData | null;
   updateSponsoredBanner: (banner: Partial<SponsoredBannerData>) => Promise<void>;
   notifications: NotificationItem[];
@@ -64,7 +68,9 @@ interface NewsContextType {
     description: string,
     sourceNotes: string,
     attachments?: string,
-    audioUri?: string
+    audioUri?: string,
+    requireJournalistReview?: boolean,
+    requireExpertFactCheck?: boolean
   ) => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
@@ -72,8 +78,39 @@ interface NewsContextType {
   register: (name: string, email: string, role: UserRole, bio?: string, password?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfilePhoto: (avatarUrl: string) => Promise<void>;
+  changePassword: (newPassword: string, oldPassword?: string) => Promise<void>;
   createAdminUser: (payload: { name: string; email: string; password?: string; role: UserRole; bio?: string }) => Promise<void>;
-  updateSubmissionStatus: (id: string, status: SubmissionStatus, note?: string) => Promise<void>;
+  updateSubmissionStatus: (
+    id: string,
+    status: SubmissionStatus | string,
+    note?: string,
+    rejectionReason?: string,
+    stage?: 'JOURNALIST' | 'EXPERT' | 'MASTER'
+  ) => Promise<void>;
+  // SusaLabs DLT Protocol
+  showDLTModal: boolean;
+  setShowDLTModal: (show: boolean) => void;
+  dltLedger: { totalBlocks: number; blocks: DLTBlock[]; networkStats: any } | null;
+  loadDLTLedger: () => Promise<any>;
+  verifyBlockDLT: (index: number) => Promise<any>;
+  verifyFullChainDLT: () => Promise<any>;
+  fetchIpfsDocument: (cid: string) => Promise<any>;
+  verifyArticleDLT: (articleId: string) => Promise<any>;
+  // Video broadcasts
+  createLiveStreamVideo: (payload: {
+    title: string;
+    videoUrl?: string;
+    videoThumbnailUrl?: string;
+    isLive?: boolean;
+    reporterName?: string;
+    location?: string;
+    description?: string;
+  }) => Promise<void>;
+  deleteLiveStreamVideo: (id: string) => Promise<void>;
+  // Lightbox
+  lightboxImage: string | null;
+  openLightbox: (uri: string) => void;
+  closeLightbox: () => void;
   isLoading: boolean;
   isRefreshing: boolean;
   refreshData: () => Promise<void>;
@@ -108,6 +145,7 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [publishedBentoArticles, setPublishedBentoArticles] = useState<Article[]>([]);
   const [bookmarkedArticleIds, setBookmarkedArticleIds] = useState<Set<string>>(new Set());
+  const [bookmarkedArticles, setBookmarkedArticles] = useState<Article[]>([]);
   const [likedVideoIds, setLikedVideoIds] = useState<Set<string>>(new Set());
   const [isUserPremium, setIsUserPremium] = useState<boolean>(false);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
@@ -118,6 +156,10 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [showAdminUserModal, setShowAdminUserModal] = useState<boolean>(false);
   const [showSearchModal, setShowSearchModal] = useState<boolean>(false);
   const [showSponsoredModal, setShowSponsoredModal] = useState<boolean>(false);
+  const [showServerModal, setShowServerModal] = useState<boolean>(false);
+  const [showDLTModal, setShowDLTModal] = useState<boolean>(false);
+  const [dltLedger, setDltLedger] = useState<{ totalBlocks: number; blocks: DLTBlock[]; networkStats: any } | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [sponsoredBanner, setSponsoredBanner] = useState<SponsoredBannerData | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -156,6 +198,9 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const openVideo = (video: VideoReport) => setSelectedVideo(video);
   const closeVideo = () => setSelectedVideo(null);
+
+  const openLightbox = (uri: string) => setLightboxImage(uri);
+  const closeLightbox = () => setLightboxImage(null);
 
   const showToast = (msg: string) => setToastMessage(msg);
   const clearToast = () => setToastMessage(null);
@@ -232,6 +277,7 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       if (bookmarksRes.status === 'fulfilled' && bookmarksRes.value) {
         setBookmarkedArticleIds(new Set(bookmarksRes.value.bookmarkedIds || []));
+        setBookmarkedArticles(bookmarksRes.value.articles || []);
       }
       if (notifsRes.status === 'fulfilled' && notifsRes.value) {
         setNotifications(notifsRes.value);
@@ -294,6 +340,12 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const res = await newsApi.toggleBookmark(articleId);
       showToast(res.isBookmarked ? 'Article saved to reading list' : 'Removed from reading list');
+      // Sync saved articles list
+      newsApi.getBookmarks().then((b) => {
+        if (b?.articles) {
+          setBookmarkedArticles(b.articles);
+        }
+      }).catch(() => {});
     } catch (err) {
       setBookmarkedArticleIds((prev) => {
         const next = new Set(prev);
@@ -349,17 +401,11 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Auth: Register
   const register = async (name: string, email: string, role: UserRole, bio?: string, password?: string) => {
     try {
-      const res = await newsApi.register({ name, email, password, role, bio });
+      const res = await newsApi.register({ name, email, role, bio, password });
       if (res.data) {
         setUserProfile(res.data);
         setIsUserPremium(Boolean(res.data.isPremium));
-        if (res.data.bookmarkedArticleIds) {
-          setBookmarkedArticleIds(new Set(res.data.bookmarkedArticleIds));
-        }
-        if (res.data.likedVideoIds) {
-          setLikedVideoIds(new Set(res.data.likedVideoIds));
-        }
-        showToast(`Welcome, ${res.data.name}! Account registered.`);
+        showToast(res.message || `Welcome, ${res.data.name}!`);
         fetchAllData(true);
       }
     } catch (err: any) {
@@ -368,12 +414,12 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Auth: Logout (clears session and redirects directly to Login page)
+  // Auth: Logout
   const logout = async () => {
     try {
       await newsApi.logout();
     } catch (err) {
-      // Ignore network error on logout
+      // Ignore
     } finally {
       setUserProfile(guestProfile);
       setIsUserPremium(false);
@@ -408,10 +454,27 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Admin: Moderate submission status
-  const updateSubmissionStatus = async (id: string, status: SubmissionStatus, note?: string) => {
+  // Change Password
+  const changePassword = async (newPassword: string, oldPassword?: string) => {
     try {
-      const updated = await newsApi.updateSubmissionStatus(id, status, note);
+      await newsApi.changePassword({ newPassword, oldPassword });
+      showToast('Password updated securely!');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update password');
+      throw err;
+    }
+  };
+
+  // Multi-Stake Submission Approval / Rejection
+  const updateSubmissionStatus = async (
+    id: string,
+    status: SubmissionStatus | string,
+    note?: string,
+    rejectionReason?: string,
+    stage?: 'JOURNALIST' | 'EXPERT' | 'MASTER'
+  ) => {
+    try {
+      const updated = await newsApi.updateSubmissionStatus(id, status, note, rejectionReason, stage);
       setSubmissions((prev) => prev.map((s) => (s.id === id ? updated : s)));
       showToast(`Submission marked as ${status}`);
       if (status === 'APPROVED') {
@@ -419,6 +482,7 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } catch (err: any) {
       showToast(err.message || 'Error updating submission');
+      throw err;
     }
   };
 
@@ -442,7 +506,9 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     description: string,
     sourceNotes: string,
     attachments?: string,
-    audioUri?: string
+    audioUri?: string,
+    requireJournalistReview?: boolean,
+    requireExpertFactCheck?: boolean
   ) => {
     if (!title.trim()) return;
 
@@ -471,11 +537,12 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         sourceNotes,
         attachments,
         audioUri,
+        requireJournalistReview,
+        requireExpertFactCheck,
       });
 
       setSubmissions((prev) => [newSubmission, ...prev]);
       showToast('Report transmitted to Verification Desk!');
-      // Refresh notifications and full data so the new submission appears
       newsApi.getNotifications().then(setNotifications).catch(() => {});
       fetchAllData(true);
     } catch (err) {
@@ -490,6 +557,8 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         category,
         attachments,
         audioUri,
+        requireJournalistReview,
+        requireExpertFactCheck,
         authorName: userProfile.name,
         authorAvatarUrl: userProfile.avatarUrl,
         createdAt: new Date().toISOString(),
@@ -549,35 +618,89 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         return next;
       });
-      console.warn('[NewsContext] Error toggling video like:', err);
+      showToast('Failed to update like status');
       return undefined;
     }
   };
 
-  // Mark notification read
+  // SusaLabs DLT Protocol
+  const loadDLTLedger = async () => {
+    try {
+      const data = await newsApi.getDLTLedger();
+      setDltLedger(data);
+      return data;
+    } catch (err: any) {
+      showToast(err.message || 'Failed to load DLT ledger');
+      return null;
+    }
+  };
+
+  const verifyBlockDLT = async (index: number) => {
+    return await newsApi.verifyBlockDLT(index);
+  };
+
+  const verifyFullChainDLT = async () => {
+    return await newsApi.verifyFullChainDLT();
+  };
+
+  const fetchIpfsDocument = async (cid: string) => {
+    return await newsApi.getIpfsDocument(cid);
+  };
+
+  const verifyArticleDLT = async (articleId: string) => {
+    return await newsApi.verifyArticleDLT(articleId);
+  };
+
+  // Video Broadcast Management
+  const createLiveStreamVideo = async (payload: {
+    title: string;
+    videoUrl?: string;
+    videoThumbnailUrl?: string;
+    isLive?: boolean;
+    reporterName?: string;
+    location?: string;
+    description?: string;
+  }) => {
+    try {
+      const created = await newsApi.createVideo(payload);
+      setLiveVideos((prev) => [created, ...prev]);
+      showToast('Live broadcast launched to portal!');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to create broadcast');
+      throw err;
+    }
+  };
+
+  const deleteLiveStreamVideo = async (id: string) => {
+    try {
+      await newsApi.deleteVideo(id);
+      setLiveVideos((prev) => prev.filter((v) => v.id !== id));
+      showToast('Broadcast removed');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete broadcast');
+    }
+  };
+
+  // Notification actions
   const markNotificationRead = async (notificationId: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n))
-    );
     try {
       await newsApi.markNotificationRead(notificationId);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n))
+      );
     } catch (err) {
-      console.warn('[NewsContext] Error marking notification read:', err);
+      console.warn('Mark read error:', err);
     }
   };
 
-  // Mark all notifications read
   const markAllNotificationsRead = async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     try {
       await newsApi.markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      showToast('All alerts marked as read');
     } catch (err) {
-      console.warn('[NewsContext] Error marking all notifications read:', err);
+      console.warn('Mark all read error:', err);
     }
-  };
-
-  const refreshData = async () => {
-    await fetchAllData(true);
   };
 
   return (
@@ -595,6 +718,7 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         submissions,
         publishedBentoArticles,
         bookmarkedArticleIds,
+        bookmarkedArticles,
         toggleBookmark,
         likedVideoIds,
         toggleVideoLike,
@@ -618,6 +742,8 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setShowSearchModal,
         showSponsoredModal,
         setShowSponsoredModal,
+        showServerModal,
+        setShowServerModal,
         sponsoredBanner,
         updateSponsoredBanner,
         notifications,
@@ -633,11 +759,25 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         register,
         logout,
         updateUserProfilePhoto,
+        changePassword,
         createAdminUser,
         updateSubmissionStatus,
+        showDLTModal,
+        setShowDLTModal,
+        dltLedger,
+        loadDLTLedger,
+        verifyBlockDLT,
+        verifyFullChainDLT,
+        fetchIpfsDocument,
+        verifyArticleDLT,
+        createLiveStreamVideo,
+        deleteLiveStreamVideo,
+        lightboxImage,
+        openLightbox,
+        closeLightbox,
         isLoading,
         isRefreshing,
-        refreshData,
+        refreshData: () => fetchAllData(true),
       }}
     >
       {children}

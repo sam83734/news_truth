@@ -309,45 +309,17 @@ To reclaim civic dignity, municipal charters must enshrine cryptographic privacy
 
   public liveVideos: VideoReport[] = [
     {
-      id: 'vid_1',
-      title: 'Market square protests escalate into the evening.',
-      videoThumbnailUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCtKQwtUQfNi0TaR0Zfq_mipPcVm0LN88opWdOTlOMhQCrWhXXIZVCQVCfRnDpL2a8hnBX1jXN_TuSTAODnubH-IOTCpkQWRRknY2vvIUjD0b7bZ2dcNxOX3oT6g6tkkxJeDd82XWy9ZddJleHN7OH15QXgLF3AsrJjvkwzFlwD3h0wUY7qfVKBXeLsFjFhQpkqunWqIxn-35zfTEwn6rlUN5dO4H-gUANdwf-g6Q9Jw5MCRmvmYY47lw',
-      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+      id: 'vid_live_aljazeera',
+      title: 'Al Jazeera English Live — 24/7 Global Field Broadcast',
+      videoThumbnailUrl: 'https://img.youtube.com/vi/gCNeDWCI0vo/hqdefault.jpg',
+      videoUrl: 'https://www.youtube.com/watch?v=gCNeDWCI0vo',
       isLive: true,
       isReplay: false,
-      reporterName: 'Marcus Vance',
-      location: 'Old City Market District',
-      viewersCount: '4.8k watching',
-      likesCount: 142,
-      description: 'Live eyewitness coverage from the central bazaar where merchants and municipal officers are negotiating access cordons.',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'vid_2',
-      title: 'Aftermath of the severe storm in District 4.',
-      videoThumbnailUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD9A8-pW-PPz1f5ySdd5Mny_s8sNLQr5GO7AvE2x3NgCKzesgsFYKl4Qk_U6rEe-xIgNgvTnFWe5q1g_IcCO5OtJTtL-bpY77MRv7n7a0cQYtuB5GqmgTtL3-4j9ekNgMbVkUX_SREBYSKsYFvfPFSlP6tUCrGqDlpYgdf86MCFh1jjoy60mKWlbP6PjRxOaYOh3RmzFoqIk-MOdWM_vyOq2gWLax_mChFuQI_YtHbRlBUzzlVRSiVtPQ',
-      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-      isLive: false,
-      isReplay: true,
-      reporterName: 'Elena Rostova',
-      location: 'Suburban Sector 4',
-      viewersCount: '18.1k views',
-      likesCount: 89,
-      description: 'Emergency crews navigate heavy flooding and downed electrical infrastructure across suburban residential zones.',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'vid_3',
-      title: 'Press briefing: Transit union responds to fare restructuring.',
-      videoThumbnailUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuB1Lj-WVucu3elFzPFEaWWopF8XkuQr2IIBGUyrAA7cqDoi3KLVvUCvuXKQmhxk6toNjNJ4poH2i2V4uahjuhUScqb6gDcG0VmXqZZ6nZZhPhDWVXhHuhOQ1c5Std9o6Fir_yb1Lc2cwcuuaFHhwwtg5UO18UR51_v--i7ZZH8VfpYtnxP04zbGvvQ9L_OhTxMSbaanWBrELaHFNHRxD5uZ7eeEm0P3gPyyUmWRDzSf3ot7MByfIlO-1w',
-      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      isLive: false,
-      isReplay: true,
-      reporterName: 'Elias Thorne',
-      location: 'Transit Authority Headquarters',
-      viewersCount: '9.4k views',
-      likesCount: 56,
-      description: 'Union representatives outline grievance filings concerning reduced late-night transit schedules.',
+      reporterName: 'Al Jazeera News Bureau',
+      location: 'Global Broadcast Network',
+      viewersCount: '28.4k watching',
+      likesCount: 512,
+      description: 'Continuous 24/7 breaking eyewitness coverage, geo-verified dispatches and live reporting from correspondents around the globe.',
       createdAt: new Date().toISOString(),
     },
   ];
@@ -389,12 +361,21 @@ To reclaim civic dignity, municipal charters must enshrine cryptographic privacy
 
   public categories: CategoryItem[] = [
     { id: 'cat_all', name: 'All', slug: 'all', description: 'All top breaking and ground dispatches' },
-    { id: 'cat_urgent', name: 'Urgent', slug: 'urgent', description: 'High priority breaking dispatches' },
+    { id: 'cat_urgent', name: 'Urgent Breaking', slug: 'urgent-breaking', description: 'High priority urgent breaking dispatches' },
     { id: 'cat_ground', name: 'Ground Reports', slug: 'ground-reports', description: 'Eyewitness citizen journalism and ground coverage' },
-    { id: 'cat_opinion', name: 'Opinion', slug: 'opinion', description: 'Expert editorials and community viewpoints' },
-    { id: 'cat_econ', name: 'Economics', slug: 'economics', description: 'Financial markets and business policy' },
-    { id: 'cat_infra', name: 'Infrastructure', slug: 'infrastructure', description: 'Urban planning, grid & transit networks' },
+    { id: 'cat_business', name: 'Business & Economy', slug: 'business-economy', description: 'Financial markets, startups, corporate filings, municipal budgets' },
+    { id: 'cat_politics', name: 'Politics & Governance', slug: 'politics-governance', description: 'City council, state policy, public hearings and civic legislation' },
+    { id: 'cat_tech', name: 'Tech & Media', slug: 'tech-media', description: 'Digital privacy, algorithmic policy, compute infrastructure, AI transparency' },
+    { id: 'cat_infra', name: 'Urban Infrastructure', slug: 'urban-infrastructure', description: 'Transit updates, power grid monitoring, municipal water telemetry' },
+    { id: 'cat_opinion', name: 'Editorial Opinion', slug: 'editorial-opinion', description: 'Investigative columns, op-eds, and whistleblower commentary' },
   ];
+
+  public layoutConfig = {
+    heroBannerCategory: 'Urgent Breaking',
+    secondaryBannerCategory: 'Tech & Media',
+    secondaryBannerTitle: 'Tech & Media News',
+    videoSectionCategory: 'All',
+  };
 
   public sponsoredBanner: SponsoredBanner = {
     id: 'sponsor_1',

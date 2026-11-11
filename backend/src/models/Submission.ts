@@ -16,6 +16,28 @@ export interface ISubmission extends Document {
   userId?: string;
   authorName?: string;
   authorAvatarUrl?: string;
+  rejectionReason?: string;
+  requireJournalistReview?: boolean;
+  requireExpertFactCheck?: boolean;
+  journalistApproval?: {
+    approved: boolean;
+    approverName: string;
+    approverId?: string;
+    approverRole?: string;
+    timestamp: string;
+    note?: string;
+  };
+  expertApproval?: {
+    approved: boolean;
+    approverName: string;
+    approverId?: string;
+    approverRole?: string;
+    timestamp: string;
+    note?: string;
+  };
+  verifiedByJournalist?: string;
+  factCheckedBy?: string;
+  finalApprovedBy?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,7 +48,7 @@ const SubmissionSchema = new Schema<ISubmission>(
     title: { type: String, required: true },
     status: {
       type: String,
-      enum: ['PENDING', 'REVISE', 'APPROVED'],
+      enum: ['PENDING', 'PENDING_EXPERT', 'PENDING_JOURNALIST', 'REVISE', 'APPROVED', 'REJECTED'],
       default: 'PENDING',
     },
     submittedTimeAgo: { type: String, default: 'Just now' },
@@ -39,6 +61,14 @@ const SubmissionSchema = new Schema<ISubmission>(
     userId: { type: String, default: '' },
     authorName: { type: String, default: '' },
     authorAvatarUrl: { type: String, default: '' },
+    rejectionReason: { type: String, default: '' },
+    requireJournalistReview: { type: Boolean, default: true },
+    requireExpertFactCheck: { type: Boolean, default: true },
+    journalistApproval: { type: Schema.Types.Mixed, default: null },
+    expertApproval: { type: Schema.Types.Mixed, default: null },
+    verifiedByJournalist: { type: String, default: '' },
+    factCheckedBy: { type: String, default: '' },
+    finalApprovedBy: { type: String, default: '' },
   },
   {
     timestamps: true,

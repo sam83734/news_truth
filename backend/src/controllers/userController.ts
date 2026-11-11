@@ -24,16 +24,32 @@ const updateUser = async (id: string, updateData: any) => {
   return await UserModel.findOneAndUpdate({ customId: id }, updateData, { new: true });
 };
 
-export const getUserProfile = async (_req: Request, res: Response) => {
+const resolveUserId = (req: Request): string => {
+  const headerId = req.headers['x-user-id'] as string;
+  if (headerId && headerId.trim()) return headerId.trim();
+  const authHeader = req.headers['authorization'] as string;
+  if (authHeader && authHeader.startsWith('Bearer jwt_')) {
+    return authHeader.replace('Bearer jwt_', '').trim();
+  }
+  return db.activeUserId;
+};
+
+export const getUserProfile = async (req: Request, res: Response) => {
   try {
+    const userId = resolveUserId(req);
     let profile: any = null;
 
-    if (mongoose.connection.readyState === 1 && db.activeUserId) {
-      profile = await findUser(db.activeUserId);
+    if (mongoose.connection.readyState === 1 && userId && userId !== 'guest_user') {
+      profile = await findUser(userId);
     }
 
     if (!profile) {
-      profile = db.userProfile;
+      if (userId && userId !== 'guest_user') {
+        profile = db.users.find((u) => u.id === userId);
+      }
+      if (!profile) {
+        profile = db.userProfile;
+      }
     }
 
     const profileObj = profile.toJSON ? profile.toJSON() : { ...profile };
@@ -50,16 +66,24 @@ export const getUserProfile = async (_req: Request, res: Response) => {
 
 export const updateUserProfile = async (req: Request, res: Response) => {
   try {
+    const userId = resolveUserId(req);
     const { name, bio, avatarUrl } = req.body;
 
     let updated: any = null;
 
-    if (mongoose.connection.readyState === 1 && db.activeUserId) {
-      updated = await updateUser(db.activeUserId, {
+    if (mongoose.connection.readyState === 1 && userId && userId !== 'guest_user') {
+      updated = await updateUser(userId, {
         ...(name && { name: name.trim() }),
         ...(bio !== undefined && { bio: bio.trim() }),
         ...(avatarUrl && { avatarUrl: avatarUrl.trim() }),
       });
+    }
+
+    const memUser = db.users.find((u) => u.id === userId);
+    if (memUser) {
+      if (name) memUser.name = name.trim();
+      if (bio !== undefined) memUser.bio = bio.trim();
+      if (avatarUrl) memUser.avatarUrl = avatarUrl.trim();
     }
 
     const memProfile = db.userProfile;
@@ -67,7 +91,7 @@ export const updateUserProfile = async (req: Request, res: Response) => {
     if (bio !== undefined) memProfile.bio = bio.trim();
     if (avatarUrl) memProfile.avatarUrl = avatarUrl.trim();
 
-    const finalObj = updated ? updated.toJSON() : { ...memProfile };
+    const finalObj = updated ? updated.toJSON() : memUser || { ...memProfile };
     delete finalObj.password;
 
     res.json({
@@ -77,6 +101,56 @@ export const updateUserProfile = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error?.message || 'Error updating user profile', error });
+  }
+};
+
+export const changePassword = async (req: Request, res: Response) => {
+  try {
+    const userId = resolveUserId(req);
+    const { currentPassword, newPassword } = req.body;
+
+    if (!newPassword || newPassword.trim().length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters.',
+      });
+    }
+
+    let user: any = null;
+    if (mongoose.connection.readyState === 1 && userId && userId !== 'guest_user') {
+      user = await findUser(userId);
+    }
+    if (!user) {
+      user = db.users.find((u) => u.id === userId);
+    }
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    // Verify current password if user has one
+    if (user.password && currentPassword && user.password !== currentPassword.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current password does not match our records.',
+      });
+    }
+
+    if (mongoose.connection.readyState === 1 && userId && userId !== 'guest_user') {
+      await updateUser(userId, { password: newPassword.trim() });
+    }
+
+    const memUser = db.users.find((u) => u.id === userId);
+    if (memUser) {
+      memUser.password = newPassword.trim();
+    }
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully.',
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message || 'Error changing password', error });
   }
 };
 
@@ -106,13 +180,14 @@ export const upgradePremium = async (req: Request, res: Response) => {
   }
 };
 
-export const getBookmarks = async (_req: Request, res: Response) => {
+export const getBookmarks = async (req: Request, res: Response) => {
   try {
+    const userId = resolveUserId(req);
     let bookmarkIds: string[] = db.userProfile.bookmarkedArticleIds || [];
     let bookmarkedArticles: any[] = [];
 
-    if (mongoose.connection.readyState === 1 && db.activeUserId) {
-      const user = await findUser(db.activeUserId);
+    if (mongoose.connection.readyState === 1 && userId && userId !== 'guest_user') {
+      const user = await findUser(userId);
       if (user) {
         bookmarkIds = user.bookmarkedArticleIds || [];
       }
@@ -125,14 +200,24 @@ export const getBookmarks = async (_req: Request, res: Response) => {
     }
 
     if (bookmarkedArticles.length === 0) {
+      if (userId && userId !== 'guest_user') {
+        const u = db.users.find((user) => user.id === userId);
+        if (u) bookmarkIds = u.bookmarkedArticleIds || [];
+      }
       bookmarkedArticles = db.articles.filter((a) => bookmarkIds.includes(a.id));
     }
 
+    const sanitized = bookmarkedArticles.map((a: any) => {
+      const plain = a.toJSON ? a.toJSON() : { ...a };
+      plain.id = plain.customId || (plain._id ? plain._id.toString() : plain.id);
+      return plain;
+    });
+
     res.json({
       success: true,
-      count: bookmarkedArticles.length,
+      count: sanitized.length,
       bookmarkedIds: bookmarkIds,
-      data: bookmarkedArticles,
+      data: sanitized,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error?.message || 'Error retrieving bookmarks', error });
@@ -141,7 +226,7 @@ export const getBookmarks = async (_req: Request, res: Response) => {
 
 export const toggleBookmark = async (req: Request, res: Response) => {
   try {
-    const activeUserId = db.activeUserId;
+    const activeUserId = resolveUserId(req);
     if (!activeUserId || activeUserId === 'guest_user' || activeUserId === 'guest') {
       return res.status(401).json({
         success: false,
@@ -151,10 +236,11 @@ export const toggleBookmark = async (req: Request, res: Response) => {
 
     const { articleId } = req.params;
 
-    let currentBookmarks: string[] = db.userProfile.bookmarkedArticleIds || [];
+    let targetUser = db.users.find((u) => u.id === activeUserId) || db.userProfile;
+    let currentBookmarks: string[] = targetUser.bookmarkedArticleIds || [];
 
-    if (mongoose.connection.readyState === 1 && db.activeUserId) {
-      const user = await findUser(db.activeUserId);
+    if (mongoose.connection.readyState === 1 && activeUserId) {
+      const user = await findUser(activeUserId);
       if (user) {
         currentBookmarks = user.bookmarkedArticleIds || [];
       }
@@ -169,21 +255,19 @@ export const toggleBookmark = async (req: Request, res: Response) => {
       updatedBookmarks = [...currentBookmarks, articleId];
     }
 
-    if (mongoose.connection.readyState === 1 && db.activeUserId) {
-      await updateUser(db.activeUserId, {
-        bookmarkedArticleIds: updatedBookmarks,
-      });
+    if (mongoose.connection.readyState === 1 && activeUserId) {
+      await updateUser(activeUserId, { bookmarkedArticleIds: updatedBookmarks });
     }
 
-    db.userProfile.bookmarkedArticleIds = updatedBookmarks;
+    targetUser.bookmarkedArticleIds = updatedBookmarks;
 
     res.json({
       success: true,
-      message: isBookmarked ? 'Article removed from reading list' : 'Article saved to reading list',
+      message: isBookmarked ? 'Article bookmark removed' : 'Article bookmarked successfully',
       isBookmarked: !isBookmarked,
       bookmarkedIds: updatedBookmarks,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error?.message || 'Error toggling bookmark', error });
+    res.status(500).json({ success: false, message: error?.message || 'Error updating bookmark', error });
   }
 };

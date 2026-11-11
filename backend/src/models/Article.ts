@@ -12,6 +12,8 @@ export interface IArticle extends Document {
   dateOrTimeAgo: string;
   category: string;
   imageUrl: string;
+  videoUrl?: string;
+  mediaType?: string;
   isVerifiedGround?: boolean;
   isUrgent?: boolean;
   isPremium?: boolean;
@@ -23,6 +25,11 @@ export interface IArticle extends Document {
   views?: string;
   viewCount?: number;
   categoryTag?: string;
+  verifiedByJournalist?: string;
+  factCheckedBy?: string;
+  finalAuditor?: string;
+  editorialDesk?: string;
+  verificationStatus?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +46,8 @@ const ArticleSchema = new Schema<IArticle>(
     dateOrTimeAgo: { type: String, default: 'Just now' },
     category: { type: String, default: 'Ground Report' },
     imageUrl: { type: String, default: '' },
+    videoUrl: { type: String, default: '' },
+    mediaType: { type: String, default: 'image' },
     isVerifiedGround: { type: Boolean, default: false },
     isUrgent: { type: Boolean, default: false },
     isPremium: { type: Boolean, default: false },
@@ -50,6 +59,11 @@ const ArticleSchema = new Schema<IArticle>(
     views: { type: String, default: '1k' },
     viewCount: { type: Number, default: 1000 },
     categoryTag: { type: String, default: '' },
+    verifiedByJournalist: { type: String, default: '' },
+    factCheckedBy: { type: String, default: '' },
+    finalAuditor: { type: String, default: '' },
+    editorialDesk: { type: String, default: 'NextTruth Dispatch & SusaLabs Civic Review' },
+    verificationStatus: { type: String, default: '100% Eyewitness Corroborated • Dual-Consensus Certified' },
   },
   {
     timestamps: true,

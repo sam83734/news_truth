@@ -9,6 +9,7 @@ import {
   CategoryItem,
   UserRole,
   SubmissionStatus,
+  DLTBlock,
 } from '../types';
 
 export interface ApiResponse<T> {
@@ -21,6 +22,12 @@ export interface ApiResponse<T> {
   error?: any;
 }
 
+let activeUserSession: { id?: string; role?: UserRole } | null = null;
+
+export const setApiUserSession = (user: { id?: string; role?: UserRole } | null) => {
+  activeUserSession = user;
+};
+
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${endpoint}`;
@@ -28,15 +35,25 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 9000); // 9s timeout
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(options?.headers as Record<string, string>),
+    };
+
+    if (activeUserSession?.id) {
+      headers['x-user-id'] = activeUserSession.id;
+    }
+    if (activeUserSession?.role) {
+      headers['x-user-role'] = activeUserSession.role;
+    }
 
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
       ...options,
+      headers,
     });
 
     clearTimeout(timeoutId);
@@ -94,10 +111,14 @@ export const newsApi = {
 
   // Auth & Session
   async login(payload: { email?: string; password?: string; role?: UserRole }): Promise<ApiResponse<UserProfile>> {
-    return await request<ApiResponse<UserProfile>>('/auth/login', {
+    const res = await request<ApiResponse<UserProfile>>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    if (res.data) {
+      setApiUserSession({ id: res.data.id, role: res.data.role });
+    }
+    return res;
   },
 
   async register(payload: {
@@ -107,10 +128,14 @@ export const newsApi = {
     bio?: string;
     role?: UserRole;
   }): Promise<ApiResponse<UserProfile>> {
-    return await request<ApiResponse<UserProfile>>('/auth/register', {
+    const res = await request<ApiResponse<UserProfile>>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    if (res.data) {
+      setApiUserSession({ id: res.data.id, role: res.data.role });
+    }
+    return res;
   },
 
   async getMe(): Promise<ApiResponse<UserProfile>> {
@@ -118,12 +143,13 @@ export const newsApi = {
   },
 
   async logout(): Promise<ApiResponse<null>> {
+    setApiUserSession(null);
     return await request<ApiResponse<null>>('/auth/logout', {
       method: 'POST',
     });
   },
 
-  // Submissions
+  // Submissions & Multi-Stake Approvals
   async getSubmissions(status?: SubmissionStatus, userId?: string): Promise<Submission[]> {
     const params = new URLSearchParams();
     if (status) params.append('status', status);
@@ -142,6 +168,8 @@ export const newsApi = {
     sourceNotes?: string;
     attachments?: string;
     audioUri?: string;
+    requireJournalistReview?: boolean;
+    requireExpertFactCheck?: boolean;
   }): Promise<Submission> {
     const res = await request<ApiResponse<Submission>>('/submissions', {
       method: 'POST',
@@ -153,12 +181,14 @@ export const newsApi = {
 
   async updateSubmissionStatus(
     id: string,
-    status: SubmissionStatus,
-    note?: string
+    status: SubmissionStatus | string,
+    note?: string,
+    rejectionReason?: string,
+    stage?: 'JOURNALIST' | 'EXPERT' | 'MASTER'
   ): Promise<Submission> {
     const res = await request<ApiResponse<Submission>>(`/submissions/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status, note }),
+      body: JSON.stringify({ status, note, rejectionReason, stage }),
     });
     if (!res.data) throw new Error('Failed to update submission');
     return res.data;
@@ -207,7 +237,7 @@ export const newsApi = {
     return res.data || null;
   },
 
-  // Videos
+  // Videos & Live Broadcast Feeds
   async getVideos(isLive?: boolean): Promise<VideoReport[]> {
     const params = new URLSearchParams();
     if (isLive !== undefined) params.append('isLive', String(isLive));
@@ -215,6 +245,28 @@ export const newsApi = {
 
     const res = await request<ApiResponse<VideoReport[]>>(`/videos${queryString}`);
     return res.data || [];
+  },
+
+  async createVideo(payload: {
+    title: string;
+    videoUrl?: string;
+    videoThumbnailUrl?: string;
+    isLive?: boolean;
+    isReplay?: boolean;
+    reporterName?: string;
+    location?: string;
+    description?: string;
+  }): Promise<VideoReport> {
+    const res = await request<ApiResponse<VideoReport>>('/videos', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!res.data) throw new Error('Failed to create video broadcast');
+    return res.data;
+  },
+
+  async deleteVideo(id: string): Promise<void> {
+    await request(`/videos/${id}`, { method: 'DELETE' });
   },
 
   async toggleVideoLike(videoId: string, action: 'like' | 'unlike'): Promise<number | undefined> {
@@ -239,6 +291,13 @@ export const newsApi = {
     });
     if (!res.data) throw new Error('Failed to update profile');
     return res.data;
+  },
+
+  async changePassword(payload: { oldPassword?: string; newPassword: string }): Promise<void> {
+    await request('/user/change-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   async upgradePremium(): Promise<UserProfile> {
@@ -266,6 +325,39 @@ export const newsApi = {
       isBookmarked: res.isBookmarked,
       bookmarkedIds: res.bookmarkedIds || [],
     };
+  },
+
+  // SusaLabs DLT Protocol Endpoints
+  async getDLTLedger(): Promise<{
+    totalBlocks: number;
+    blocks: DLTBlock[];
+    networkStats: any;
+  }> {
+    const res = await request<ApiResponse<{ totalBlocks: number; blocks: DLTBlock[]; networkStats: any }>>(
+      '/dlt/ledger'
+    );
+    if (!res.data) throw new Error('Failed to fetch DLT ledger');
+    return res.data;
+  },
+
+  async verifyBlockDLT(index: number): Promise<any> {
+    const res = await request<ApiResponse<any>>(`/dlt/verify-block/${index}`);
+    return res.data;
+  },
+
+  async verifyArticleDLT(articleId: string): Promise<any> {
+    const res = await request<ApiResponse<any>>(`/dlt/verify/${articleId}`);
+    return res.data;
+  },
+
+  async verifyFullChainDLT(): Promise<any> {
+    const res = await request<ApiResponse<any>>('/dlt/verify-chain');
+    return res.data;
+  },
+
+  async getIpfsDocument(cid: string): Promise<any> {
+    const res = await request<ApiResponse<any>>(`/dlt/ipfs/${encodeURIComponent(cid)}`);
+    return res.data;
   },
 
   // Notifications

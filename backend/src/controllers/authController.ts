@@ -19,15 +19,23 @@ export const login = async (req: Request, res: Response) => {
     }
 
     let user: any = null;
+    const emailNorm = email ? email.toLowerCase().trim() : '';
+    const resolvedEmail =
+      emailNorm === 'journalist@nexttruth.media'
+        ? 'sarah.jenkins@nexttruth.media'
+        : emailNorm === 'expert@nexttruth.media'
+        ? 'elias.thorne@nexttruth.media'
+        : emailNorm;
 
     // If MongoDB is connected, query MongoDB
     if (mongoose.connection.readyState === 1) {
       if (role && typeof role === 'string') {
         const targetRole = role.toUpperCase() as UserRole;
         user = await UserModel.findOne({ role: targetRole });
-      } else if (email && typeof email === 'string') {
-        const emailLower = email.toLowerCase().trim();
-        user = await UserModel.findOne({ email: emailLower });
+      } else if (emailNorm) {
+        user = await UserModel.findOne({
+          $or: [{ email: emailNorm }, { email: resolvedEmail }],
+        });
       }
     }
 
@@ -36,9 +44,12 @@ export const login = async (req: Request, res: Response) => {
       if (role && typeof role === 'string') {
         const targetRole = role.toUpperCase() as UserRole;
         user = db.users.find((u) => u.role === targetRole);
-      } else if (email && typeof email === 'string') {
-        const emailLower = email.toLowerCase().trim();
-        user = db.users.find((u) => u.email.toLowerCase() === emailLower);
+      } else if (emailNorm) {
+        user = db.users.find(
+          (u) =>
+            u.email.toLowerCase() === emailNorm ||
+            u.email.toLowerCase() === resolvedEmail
+        );
       }
     }
 

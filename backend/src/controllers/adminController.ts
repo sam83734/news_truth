@@ -7,6 +7,7 @@ import { ArticleModel } from '../models/Article';
 import { db } from '../data/db';
 import { UserProfile, UserRole, SubmissionStatus, TargetAudience, Article } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { dltService } from '../services/dltService';
 
 export const getAdminUsers = async (_req: Request, res: Response) => {
   try {
@@ -117,104 +118,31 @@ export const createAdminUser = async (req: Request, res: Response) => {
   }
 };
 
+import { processSubmissionVerification, getRequestUserId } from './submissionController';
+
 export const updateSubmissionVerification = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { status, note } = req.body;
+    const { status, note, rejectionReason, stage } = req.body;
 
-    let updated: any = null;
+    const activeUserId = getRequestUserId(req);
+    const roleHeader = (req.headers['x-user-role'] as string)?.toUpperCase();
 
-    if (mongoose.connection.readyState === 1) {
-      const isObjectId = mongoose.Types.ObjectId.isValid(id) && id.length === 24;
-      const query = isObjectId ? { _id: id } : { customId: id };
-      updated = await SubmissionModel.findOneAndUpdate(
-        query,
-        {
-          status: status.toUpperCase(),
-          ...(note !== undefined && { note }),
-        },
-        { new: true }
-      );
-    }
-
-    const memSub = db.submissions.find((s) => s.id === id);
-    if (memSub) {
-      if (status) memSub.status = status.toUpperCase() as SubmissionStatus;
-      if (note !== undefined) memSub.note = note;
-      memSub.updatedAt = new Date().toISOString();
-    }
-
-    const targetSub = updated ? updated.toJSON() : memSub;
-
-    if (!targetSub) {
-      return res.status(404).json({ success: false, message: `Submission with ID ${id} not found` });
-    }
-
-    // If APPROVED, publish this post as a verified ground news article on Home feed
-    if (status.toUpperCase() === 'APPROVED') {
-      let imgUrl = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=800';
-      if (targetSub.attachments) {
-        try {
-          const parsed = JSON.parse(targetSub.attachments);
-          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.uri) {
-            imgUrl = parsed[0].uri;
-          }
-        } catch (e) {}
-      }
-
-      let authorName = 'Eyewitness Correspondent';
-      let authorTitle = 'Verified Citizen Reporter';
-      let authorAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120&h=120';
-
-      if (targetSub.userId) {
-        const u = db.users.find((user) => user.id === targetSub.userId);
-        if (u) {
-          authorName = u.name;
-          authorTitle = u.roleBadge || 'Citizen Reporter';
-          authorAvatar = u.avatarUrl || authorAvatar;
-        }
-      }
-
-      const publishedArticleData = {
-        customId: `art_sub_${targetSub.id || targetSub._id || uuidv4().substring(0, 8)}`,
-        title: targetSub.title,
-        excerpt: targetSub.description ? targetSub.description.substring(0, 160) : targetSub.title,
-        fullContent: targetSub.description || targetSub.title,
-        authorName,
-        authorTitle,
-        authorAvatarUrl: authorAvatar,
-        dateOrTimeAgo: 'Just now (Approved)',
-        category: targetSub.category || 'Ground Reports',
-        imageUrl: imgUrl,
-        isVerifiedGround: true,
-        isHero: false,
-        readTime: '2 min',
-        views: '1',
-        viewCount: 1,
-        categoryTag: 'VERIFIED DISPATCH',
-      };
-
-      if (mongoose.connection.readyState === 1) {
-        await ArticleModel.findOneAndUpdate(
-          { customId: publishedArticleData.customId },
-          publishedArticleData,
-          { upsert: true, new: true }
-        );
-      }
-
-      const existingIdx = db.articles.findIndex((a) => a.id === publishedArticleData.customId);
-      const memArt: Article = { id: publishedArticleData.customId, ...publishedArticleData };
-      if (existingIdx >= 0) {
-        db.articles[existingIdx] = memArt;
-      } else {
-        db.articles.unshift(memArt);
-      }
-    }
+    const result = await processSubmissionVerification(
+      id,
+      status || 'APPROVED',
+      note,
+      rejectionReason,
+      stage,
+      activeUserId,
+      roleHeader
+    );
 
     res.json({
       success: true,
-      message: `Submission ${id} updated to ${status} and published to Home feed.`,
-      data: targetSub,
+      message: result.message,
+      data: result.submission,
+      isFullyApproved: result.isFullyApproved,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error?.message || 'Error updating submission verification', error });

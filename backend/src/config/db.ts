@@ -7,6 +7,7 @@ import { NotificationModel } from '../models/Notification';
 import { BannerModel } from '../models/Banner';
 import { CategoryModel } from '../models/Category';
 import { db } from '../data/db';
+import { dltService } from '../services/dltService';
 
 export const connectDB = async (): Promise<boolean> => {
   const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/nexttruth';
@@ -20,6 +21,9 @@ export const connectDB = async (): Promise<boolean> => {
 
     // Auto-seed initial data to MongoDB if empty
     await seedDatabaseIfEmpty();
+
+    // Sync DLT Ledger from MongoDB
+    await dltService.syncWithDatabase(db.articles);
 
     return true;
   } catch (error: any) {

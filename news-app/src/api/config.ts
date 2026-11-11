@@ -1,12 +1,18 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-// Developer computer LAN IP
-const LOCAL_LAN_IP = '192.168.1.35';
+// Developer computer LAN IP - Current active IPv4 on LAN: 192.168.1.48
+const LOCAL_LAN_IP = '192.168.1.48';
 
 const getDevHost = (): string => {
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest?.debuggerHost ||
+    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost ||
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
+    (Constants as any).expoGoConfig?.debuggerHost;
+
+  if (hostUri && typeof hostUri === 'string') {
     const rawHost = hostUri.split(':')[0];
     // Check if hostUri is a real local IP address (e.g. 192.168.1.x)
     const isIpAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(rawHost);
@@ -34,6 +40,9 @@ export const setCustomApiHost = (host: string) => {
   }
   if (cleanHost.endsWith('/')) {
     cleanHost = cleanHost.slice(0, -1);
+  }
+  if (cleanHost.endsWith('/api')) {
+    cleanHost = cleanHost.slice(0, -4);
   }
   CURRENT_API_HOST = cleanHost;
   return CURRENT_API_HOST;

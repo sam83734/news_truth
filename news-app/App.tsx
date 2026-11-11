@@ -10,7 +10,11 @@ import { AuthModal } from './src/components/AuthModal';
 import { AdminCreateUserModal } from './src/components/AdminCreateUserModal';
 import { SearchModal } from './src/components/SearchModal';
 import { AdminSponsoredModal } from './src/components/AdminSponsoredModal';
+import { ServerConfigModal } from './src/components/ServerConfigModal';
 import { ToastMessage } from './src/components/ToastMessage';
+import { DLTExplorerModal } from './src/components/DLTExplorerModal';
+import { ImageLightboxModal } from './src/components/ImageLightboxModal';
+import { LiveStreamPlayerModal } from './src/components/LiveStreamPlayerModal';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { VideoScreen } from './src/screens/VideoScreen';
 import { ColumnsScreen } from './src/screens/ColumnsScreen';
@@ -45,6 +49,12 @@ const MainApp: React.FC = () => {
     setShowSearchModal,
     showSponsoredModal,
     setShowSponsoredModal,
+    showServerModal,
+    setShowServerModal,
+    showDLTModal,
+    setShowDLTModal,
+    lightboxImage,
+    closeLightbox,
     sponsoredBanner,
     updateSponsoredBanner,
     notifications,
@@ -62,6 +72,14 @@ const MainApp: React.FC = () => {
   useEffect(() => {
     const onBackPress = () => {
       // 1. Close open sheets & modals first
+      if (lightboxImage) {
+        closeLightbox();
+        return true;
+      }
+      if (showDLTModal) {
+        setShowDLTModal(false);
+        return true;
+      }
       if (selectedArticle) {
         closeArticle();
         return true;
@@ -76,6 +94,10 @@ const MainApp: React.FC = () => {
       }
       if (showSponsoredModal) {
         setShowSponsoredModal(false);
+        return true;
+      }
+      if (showServerModal) {
+        setShowServerModal(false);
         return true;
       }
       if (showPremiumDialog) {
@@ -108,19 +130,25 @@ const MainApp: React.FC = () => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => subscription.remove();
   }, [
+    lightboxImage,
+    showDLTModal,
     selectedArticle,
     selectedVideo,
     showSearchModal,
     showSponsoredModal,
+    showServerModal,
     showPremiumDialog,
     showNotificationDialog,
     showAuthModal,
     showAdminUserModal,
     currentTab,
+    closeLightbox,
+    setShowDLTModal,
     closeArticle,
     closeVideo,
     setShowSearchModal,
     setShowSponsoredModal,
+    setShowServerModal,
     setShowPremiumDialog,
     setShowNotificationDialog,
     setShowAuthModal,
@@ -164,6 +192,18 @@ const MainApp: React.FC = () => {
 
       {/* Bottom Navigation Bar */}
       <BottomNavBar currentTab={currentTab} onTabSelected={selectTab} />
+
+      {/* SusaLabs DLT Blockchain Truth Ledger Explorer Modal */}
+      <DLTExplorerModal />
+
+      {/* Full-Screen High-Resolution Image/Media Lightbox Modal */}
+      <ImageLightboxModal
+        imageUri={lightboxImage}
+        onDismiss={closeLightbox}
+      />
+
+      {/* Eyewitness Live Stream & Video Replay Player Modal */}
+      <LiveStreamPlayerModal />
 
       {/* Article Detail Reader Bottom Sheet */}
       <ArticleDetailSheet
@@ -223,6 +263,12 @@ const MainApp: React.FC = () => {
         initialBanner={sponsoredBanner}
         onDismiss={() => setShowSponsoredModal(false)}
         onSave={updateSponsoredBanner}
+      />
+
+      {/* Backend API Server IP & Host Configuration Modal */}
+      <ServerConfigModal
+        visible={showServerModal}
+        onDismiss={() => setShowServerModal(false)}
       />
 
       {/* Native-style Toast Feedback */}
